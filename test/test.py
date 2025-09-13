@@ -3,38 +3,56 @@
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ClockCycles
-
+from cocotb.triggers import ClockCycles, RisingEdge
 
 @cocotb.test()
 async def test_project(dut):
-    dut._log.info("Start")
+    dut._log.info("Start ADPLL test")
 
-    # Set the clock period to 10 us (100 KHz)
-    clock = Clock(dut.clk, 10, units="us")
+    # Clock: 20 ns period = 50 MHz (matches info.yaml)
+    clock = Clock(dut.clk, 20, units="ns")
     cocotb.start_soon(clock.start())
 
     # Reset
-    dut._log.info("Reset")
-    dut.ena.value = 1
-    dut.ui_in.value = 0
+    dut._log.info("Resetting DUT")
+    dut.ena.value    = 1
+    dut.ui_in.value  = 0
     dut.uio_in.value = 0
-    dut.rst_n.value = 0
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
+    dut.rst_n.value  = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value  = 1
+    await ClockCycles(dut.clk, 5)
 
-    dut._log.info("Test project behavior")
+    # Quick check: uio_oe directions
+    uio_oe = int(dut.uio_oe.value)
+    dut._log.info(f"uio_oe = {uio_oe:08b}")
+    assert (uio_oe & 0b11) == 0b11, "fb_clk & dco_out should be outputs"
 
-    # Set the input values you want to test
-    dut.ui_in.value = 20
-    dut.uio_in.value = 30
+    # Apply a reference clock pulse stream on ui[1] = clk_ref
+    dut._log.info("Driving reference clock on ui_in[1]")
+    for _ in range(20):
+        dut.ui_in.value = dut.ui_in.value ^ (1 << 1)  # toggle bit[1]
+        await ClockCycles(dut.clk, 1)
 
-    # Wait for one clock cycle to see the output values
-    await ClockCycles(dut.clk, 1)
+    # Program a value: param_sel = 1 (alpha), pgm_value = 0b10101
+    dut._log.info("Programming alpha = 0b10101")
+    dut.uio_in.value = (0b10101 << 2)  # bits 6:2
+    dut.ui_in.value  = (1 << 3) | (1 << 5)  # pgm=1, param_sel=1
+    await ClockCycles(dut.clk, 2)
+    dut.ui_in.value  = (0 << 3) | (1 << 5)  # pgm back to 0
+    await ClockCycles(dut.clk, 2)
 
-    # The following assersion is just an example of how to check the output values.
-    # Change it to match the actual expected output of your module:
-    assert dut.uo_out.value == 50
+    # Observe toggling on dco_out (uio_out[1]) or fb_clk (uio_out[0])
+    prev_val = int(dut.uio_out.value & 0b11)
+    toggled  = False
+    for _ in range(2000):
+        await RisingEdge(dut.clk)
+        now_val = int(dut.uio_out.value & 0b11)
+        if now_val != prev_val:
+            toggled = True
+            break
+        prev_val = now_val
 
-    # Keep testing the module by changing the input values, waiting for
-    # one or more clock cycles, and asserting the expected output values.
+    assert toggled, "Expected dco_out/fb_clk to toggle after programming"
+
+    dut._log.info("ADPLL basic smoke test passed")
