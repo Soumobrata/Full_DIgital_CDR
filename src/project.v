@@ -1,7 +1,9 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 `default_nettype none
 
-// Top of the ADPLL core (NO TinyTapeout pads here)
+// -----------------------------------------------------------------------------
+// ADPLL core top (padless). All logic is synchronous to the TT clock domain.
+// -----------------------------------------------------------------------------
 module adpll_top(
   input  wire        clk,
   input  wire        rst, 
@@ -44,57 +46,59 @@ module adpll_top(
 
   // core
   adpll_5bit u0(
-    .clk          (clk),
-    .reset        (rst),
-    .clk90        (clk90),
-    .clk_ref      (clk_ref),
-    .ndiv         (ndiv),
-    .alpha_var    (alpha_var_buf),
-    .beta_var     (beta_var_buf),
-    .dco_offset   (dco_offset_buf),
+    .clk           (clk),
+    .reset         (rst),
+    .clk90         (clk90),
+    .clk_ref       (clk_ref),
+    .ndiv          (ndiv),
+    .alpha_var     (alpha_var_buf),
+    .beta_var      (beta_var_buf),
+    .dco_offset    (dco_offset_buf),
     .dco_thresh_val(dco_thresh_buf),
-    .kdco         (kdco_buf),
-    .fb_clk       (fb_clk),
-    .integ_out    (integ_out),
-    .integ_sign   (integ_sign),
-    .filter_out   (filter_out),
-    .filter_sign  (filter_sign),
-    .dco_out      (dco_out)
+    .kdco          (kdco_buf),
+    .fb_clk        (fb_clk),
+    .integ_out     (integ_out),
+    .integ_sign    (integ_sign),
+    .filter_out    (filter_out),
+    .filter_sign   (filter_sign),
+    .dco_out       (dco_out)
   );
 
   // programming flops
-  always @(posedge ndiv_ld or posedge clr) begin
-    if (~clr) ndiv <= pgm_value[3:0];
-    else      ndiv <= 4'd0;
+  always @(posedge clk or posedge clr) begin
+    if (clr)        ndiv <= 4'd0;
+    else if (ndiv_ld) ndiv <= pgm_value[3:0];
   end
 
-  always @(posedge alpha_en or posedge clr) begin
-    if (~clr) alpha_var_buf <= pgm_value;
-    else      alpha_var_buf <= 5'd0;
+  always @(posedge clk or posedge clr) begin
+    if (clr)        alpha_var_buf <= 5'd0;
+    else if (alpha_en) alpha_var_buf <= pgm_value;
   end
 
-  always @(posedge beta_en or posedge clr) begin
-    if (~clr) beta_var_buf <= pgm_value;
-    else      beta_var_buf <= 5'd0;
+  always @(posedge clk or posedge clr) begin
+    if (clr)        beta_var_buf <= 5'd0;
+    else if (beta_en) beta_var_buf <= pgm_value;
   end
 
-  always @(posedge dco_offset_en or posedge clr) begin
-    if (~clr) dco_offset_buf <= pgm_value;
-    else      dco_offset_buf <= 5'd0;
+  always @(posedge clk or posedge clr) begin
+    if (clr)        dco_offset_buf <= 5'd0;
+    else if (dco_offset_en) dco_offset_buf <= pgm_value;
   end
 
-  always @(posedge dco_thresh_en or posedge clr) begin
-    if (~clr) dco_thresh_buf <= pgm_value;
-    else      dco_thresh_buf <= 5'd0;
+  always @(posedge clk or posedge clr) begin
+    if (clr)        dco_thresh_buf <= 5'd0;
+    else if (dco_thresh_en) dco_thresh_buf <= pgm_value;
   end
 
-  always @(posedge kdco_en or posedge clr) begin
-    if (~clr) kdco_buf <= pgm_value;
-    else      kdco_buf <= 5'd0;
+  always @(posedge clk or posedge clr) begin
+    if (clr)        kdco_buf <= 5'd0;
+    else if (kdco_en) kdco_buf <= pgm_value;
   end
 endmodule
 
-// 5-bit ADPLL core
+// -----------------------------------------------------------------------------
+// ADPLL core
+// -----------------------------------------------------------------------------
 module adpll_5bit(
   input  wire        clk,
   input  wire        reset,
@@ -119,10 +123,10 @@ module adpll_5bit(
   wire        freq_div_buf;
   wire        clk2x;
 
-  // 1. Sampling clock 2x
+  // 1. Sampling clock 2x (simple XOR, acceptable at RTL)
   assign clk2x = clk ^ clk90;
 
-  // 2. Phase Detection
+  // 2. Phase Detection (now fully synchronous to clk via synchronizers)
   tdc_sr_5bit i0_tdc(.clk(clk), .reset(reset), .clk_ref(clk_ref), .fb_clk(fb_clk),
                      .up_error(up_error), .dwn_error(dwn_error));
 
@@ -152,40 +156,69 @@ module adpll_5bit(
   assign fb_clk = (ndiv==4'd0) ? dco_out : freq_div_buf;
 endmodule
 
-// Thermometer-coded TDC PD
+// -----------------------------------------------------------------------------
+// Thermometer-coded TDC PD (all logic synchronous to clk)
+// -----------------------------------------------------------------------------
 module tdc_sr_5bit(
-  input  wire        clk,
-  input  wire        reset,
-  input  wire        clk_ref,
-  input  wire        fb_clk,
-  output reg [31:0]  up_error,
-  output reg [31:0]  dwn_error
+  input  wire       clk,       // TT clock domain (50 MHz)
+  input  wire       reset,
+  input  wire       clk_ref,   // async
+  input  wire       fb_clk,    // async
+  output reg [31:0] up_error,
+  output reg [31:0] dwn_error
 );
-  reg start;
-  reg up, dwn;
+  // 1) Synchronize async clocks into clk domain
+  reg [2:0] clk_ref_sync, fb_clk_sync;
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      clk_ref_sync <= 3'b000;
+      fb_clk_sync  <= 3'b000;
+    end else begin
+      clk_ref_sync <= {clk_ref_sync[1:0], clk_ref};
+      fb_clk_sync  <= {fb_clk_sync[1:0],  fb_clk};
+    end
+  end
+
+  // 2) Rising edge detection (clk domain)
+  wire clk_ref_rise =  clk_ref_sync[2] & ~clk_ref_sync[1];
+  wire fb_clk_rise  =  fb_clk_sync[2]  & ~fb_clk_sync[1];
+
+  // 3) Sequential PD in clk domain
+  reg start, up, dwn;
   reg reset_trig;
 
-  // 1. make synchronous reset for PD/TDC
   always @(posedge clk or posedge reset) begin
-    if (reset) reset_trig <= 1'b1;
-    else       reset_trig <= up & dwn;
+    if (reset) begin
+      start      <= 1'b0;
+      up         <= 1'b0;
+      dwn        <= 1'b0;
+      reset_trig <= 1'b1;
+    end else begin
+      // Start after the first clk_ref edge
+      if (clk_ref_rise)
+        start <= 1'b1;
+
+      // Assert UP/DWN on edges
+      if (clk_ref_rise)
+        up <= start;
+      if (fb_clk_rise)
+        dwn <= start;
+
+      // Reset when both asserted
+      reset_trig <= up & dwn;
+      if (reset_trig) begin
+        up  <= 1'b0;
+        dwn <= 1'b0;
+      end
+    end
   end
 
-  // 2. UP
-  always @(posedge clk_ref or posedge reset_trig) begin
-    if (reset_trig) up <= 1'b0;
-    else            up <= start;
-  end
-
-  // 3. DOWN
-  always @(posedge fb_clk or posedge reset_trig) begin
-    if (reset_trig) dwn <= 1'b0;
-    else            dwn <= start;
-  end
-
-  // 4. TDC shift registers
-  always @(posedge clk or posedge reset_trig) begin
-    if (reset_trig) begin
+  // 4) TDC shift registers (clk domain)
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      up_error  <= 32'd0;
+      dwn_error <= 32'd0;
+    end else if (reset_trig) begin
       up_error  <= 32'd0;
       dwn_error <= 32'd0;
     end else begin
@@ -195,15 +228,11 @@ module tdc_sr_5bit(
       dwn_error[31:1] <= dwn_error[30:0];
     end
   end
-
-  // 5. start after clk_ref
-  always @(posedge clk_ref or posedge reset) begin
-    if (reset) start <= 1'b0;
-    else       start <= 1'b1;
-  end
 endmodule
 
+// -----------------------------------------------------------------------------
 // 5-bit PI filter
+// -----------------------------------------------------------------------------
 module pi_filter_5bit(
   input  wire       clk,
   input  wire       reset,
@@ -243,7 +272,9 @@ module pi_filter_5bit(
                 .sum(filter_out), .sign_out(filter_sign));
 endmodule
 
+// -----------------------------------------------------------------------------
 // Ones counter (32 -> 5 bits)
+// -----------------------------------------------------------------------------
 module ones_counter_5bit(
   input  wire [31:0] data_in,
   output wire [4:0]  data_out
@@ -255,6 +286,7 @@ module ones_counter_5bit(
       assign d[i] = {4'b0000, data_in[i]};
     end
   endgenerate
+
   assign data_out =
       d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7] +
       d[8] + d[9] + d[10] + d[11] + d[12] + d[13] + d[14] + d[15] +
@@ -262,7 +294,9 @@ module ones_counter_5bit(
       d[24] + d[25] + d[26] + d[27] + d[28] + d[29] + d[30] + d[31];
 endmodule
 
+// -----------------------------------------------------------------------------
 // DCO
+// -----------------------------------------------------------------------------
 module dco_5bit(
   input  wire       clk,
   input  wire       reset,
@@ -302,7 +336,9 @@ module dco_5bit(
   end
 endmodule
 
-// Programmable frequency divider
+// -----------------------------------------------------------------------------
+// Programmable frequency divider (<= in sequential logic)
+// -----------------------------------------------------------------------------
 module freq_divider_5bit(
   input  wire       clk,
   input  wire       reset,
@@ -314,20 +350,22 @@ module freq_divider_5bit(
 
   always @(posedge clk or posedge reset) begin
     if (reset) begin
-      counter      = 4'd0;
-      freq_div_out = 1'b0;
+      counter      <= 4'd0;
+      freq_div_out <= 1'b0;
     end else begin
       if (counter >= thresh) begin
-        freq_div_out = ~freq_div_out;
-        counter      = 4'd0;
+        freq_div_out <= ~freq_div_out;
+        counter      <= 4'd0;
       end else begin
-        counter      = counter + 1;
+        counter      <= counter + 1;
       end
     end
   end
 endmodule
 
+// -----------------------------------------------------------------------------
 // 5-bit Adder/Subtractor with sign
+// -----------------------------------------------------------------------------
 module acs_5bit(
   input  wire       sign_in1,
   input  wire [4:0] in1,
