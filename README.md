@@ -1,41 +1,52 @@
-![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 
-# Tiny Tapeout Verilog Project Template
+# All Digital PLL (ADPLL) on TinyTapeout
 
-- [Read the documentation for project](docs/info.md)
+This project implements a **fully programmable all-digital phase-locked loop (ADPLL)** in Verilog.  
+It uses a TDC-based phase detector, PI filter, DCO, and programmable parameters for flexibility.
 
-## What is Tiny Tapeout?
+- **Top module**: `tt_um_adpll`
+- **Clock**: 50 MHz global `clk` provided by TinyTapeout
+- **Reset**: `rst_n` (active-low, inverted internally to active-high)
 
-Tiny Tapeout is an educational project that aims to make it easier and cheaper than ever to get your digital and analog designs manufactured on a real chip.
+---
 
-To learn more and get started, visit https://tinytapeout.com.
+## Pinout
 
-## Set up your Verilog project
+| Pin    | Name / Function     | Direction | Notes |
+|--------|---------------------|-----------|-------|
+| `ui[0]` | `clk90`             | Input     | External 90° shifted clock (optional; not guaranteed phase-aligned) |
+| `ui[1]` | `clk_ref`           | Input     | Reference clock input |
+| `ui[2]` | `clr`               | Input     | Clear all programmed values (active-high) |
+| `ui[3]` | `pgm`               | Input     | Programming enable (set high while loading parameters) |
+| `ui[4]` | `out_sel`           | Input     | Selects filter or integrator output |
+| `ui[7:5]` | `param_sel[2:0]`  | Input     | Selects which parameter to program |
+| `uo[4:0]` | `dout[4:0]`       | Output    | Filter / integrator data output |
+| `uo[5]` | `sign`              | Output    | Sign of filter/integrator output |
+| `uo[6]` | —                   | Output    | Unused (0) |
+| `uo[7]` | —                   | Output    | Unused (0) |
+| `uio[0]` | `fb_clk`           | Output    | Feedback clock from divider/DCO |
+| `uio[1]` | `dco_out`          | Output    | Digitally controlled oscillator output |
+| `uio[6:2]` | `pgm_value[4:0]` | Input     | 5-bit programming value |
+| `uio[7]` | —                  | —         | Unused |
 
-1. Add your Verilog files to the `src` folder.
-2. Edit the [info.yaml](info.yaml) and update information about your project, paying special attention to the `source_files` and `top_module` properties. If you are upgrading an existing Tiny Tapeout project, check out our [online info.yaml migration tool](https://tinytapeout.github.io/tt-yaml-upgrade-tool/).
-3. Edit [docs/info.md](docs/info.md) and add a description of your project.
-4. Adapt the testbench to your design. See [test/README.md](test/README.md) for more information.
+---
 
-The GitHub action will automatically build the ASIC files using [OpenLane](https://www.zerotoasiccourse.com/terminology/openlane/).
+## Notes
 
-## Enable GitHub actions to build the results page
+- Only one global 50 MHz clock is guaranteed in TinyTapeout. An external `clk90` input via `ui[0]` will not be phase-locked or low-jitter with respect to `clk`.  
+- Internal reset is **active-high**, so `tt_um_adpll` inverts `rst_n` before passing it down.  
+- `uio[0]` and `uio[1]` are outputs (`uio_oe=1`), while `uio[6:2]` are inputs (`uio_oe=0`).  
 
-- [Enabling GitHub Pages](https://tinytapeout.com/faq/#my-github-action-is-failing-on-the-pages-part)
+---
 
-## Resources
+## Source Files
 
-- [FAQ](https://tinytapeout.com/faq/)
-- [Digital design lessons](https://tinytapeout.com/digital_design/)
-- [Learn how semiconductors work](https://tinytapeout.com/siliwiz/)
-- [Join the community](https://tinytapeout.com/discord)
-- [Build your design locally](https://www.tinytapeout.com/guides/local-hardening/)
+- `src/tt_um_adpll.v` — TinyTapeout wrapper (handles pad mapping, reset inversion, I/O enables).  
+- `src/project.v` — Contains all ADPLL submodules:
 
-## What next?
 
-- [Submit your design to the next shuttle](https://app.tinytapeout.com/).
-- Edit [this README](README.md) and explain your design, how it works, and how to test it.
-- Share your project on your social network of choice:
-  - LinkedIn [#tinytapeout](https://www.linkedin.com/search/results/content/?keywords=%23tinytapeout) [@TinyTapeout](https://www.linkedin.com/company/100708654/)
-  - Mastodon [#tinytapeout](https://chaos.social/tags/tinytapeout) [@matthewvenn](https://chaos.social/@matthewvenn)
-  - X (formerly Twitter) [#tinytapeout](https://twitter.com/hashtag/tinytapeout) [@tinytapeout](https://twitter.com/tinytapeout)
+---
+
+## License
+
+Apache-2.0 (SPDX identifier: `Apache-2.0`)
