@@ -25,3 +25,6 @@ module tt_um_adpll (
   wire _unused = &{ena, clk, rst_n, 1'b0};
 
 endmodule
+
+`default_nettype wire
+
