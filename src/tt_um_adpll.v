@@ -1,15 +1,3 @@
-/*
- * Copyright (c) 2024 Your Name
- * SPDX-License-Identifier: Apache-2.0 */
- 
-/*`include "adpll_top.v"
-`include "adpll_5bit.v"
-`include "tdc_sr_5bit.v"
-`include "ones_counter_5bit.v"
-`include "acs_5bit.v"
-`include "pi_filter_5bit.v"
-`include "dco_5bit.v"
-`include "freq_divider_5bit.v" */
 
 
 
@@ -568,6 +556,7 @@ endmodule
 
 
 `default_nettype none
+
 
 
 
