@@ -123,19 +123,12 @@ module adpll_5bit(
   wire        freq_div_buf;
   wire        clk2x;
 
-  // 1. Sampling clock 2x (simple XOR, acceptable at RTL)
-  assign clk2x = clk ^ clk90;
-
-  // 2. Phase Detection (now fully synchronous to clk via synchronizers)
-  tdc_sr_5bit i0_tdc(.clk(clk), .reset(reset), .clk_ref(clk_ref), .fb_clk(fb_clk),
-                     .up_error(up_error), .dwn_error(dwn_error));
-
-  // 3. Thermo -> binary & subtract
-  ones_counter_5bit i1_oc(.data_in(up_error),  .data_out(bin_up_error));
-  ones_counter_5bit i2_oc(.data_in(dwn_error), .data_out(bin_dwn_error));
-  acs_5bit i3_sub(.sign_in1(1'b0), .in1(bin_up_error),
-                  .sign_in2(1'b1), .in2(bin_dwn_error),
-                  .sum(bin_error), .sign_out(error_sign));
+/* (remove clk2x entirely) */
+/* ... */
+dco_5bit i5_dco(.clk(clk), .reset(reset), .kdco(kdco),
+                .ctrl_sign(filter_sign), .ctrl(filter_out),
+                .dco_offset(dco_offset), .thresh_val(dco_thresh_val),
+                .dco_clk(dco_out));
 
   // 4. Loop filter
   pi_filter_5bit i4_pi_filter(.clk(clk), .reset(reset), .error_sign(error_sign), .error(bin_error),
