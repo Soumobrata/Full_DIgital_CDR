@@ -1,7 +1,5 @@
-<!---
+# How it works
 
-This file is used to generate your project datasheet. Please fill in the information below and delete any unused
-sections.
+This project implements a **digital Clock and Data Recovery (CDR)** loop using a custom **open-loop VCO-ADC front-end** as a sampler.
 
-You can also include images in this folder and reference them in the markdown. Each image must be less than
-512 kb in size, and the combined size of all images must be less than 1 MB.
+- The **sampler** is based on a phase accumulator (VCO-ADC), which converts the 8-bit input (`ui_in[7:0]`) into sampled outputs.
