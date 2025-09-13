@@ -275,24 +275,47 @@ endmodule
 // -----------------------------------------------------------------------------
 // Ones counter (32 -> 5 bits)
 // -----------------------------------------------------------------------------
+// Fast 32-bit popcount using a balanced adder tree.
+// Latency: 0 cycles (pure combinational). Add the optional register if needed.
 module ones_counter_5bit(
   input  wire [31:0] data_in,
   output wire [4:0]  data_out
 );
-  wire [4:0] d[31:0];
+  // 32 → 16 (2-bit sums), 16 → 8 (3-bit), 8 → 4 (4-bit), 4 → 2 (5-bit), 2 → 1 (5-bit)
+  wire [1:0] s16 [15:0];
   genvar i;
   generate
-    for (i=0; i<32; i=i+1) begin : G
-      assign d[i] = {4'b0000, data_in[i]};
+    for (i=0;i<16;i=i+1) begin : L1
+      assign s16[i] = data_in[2*i] + data_in[2*i+1];
     end
   endgenerate
 
-  assign data_out =
-      d[0] + d[1] + d[2] + d[3] + d[4] + d[5] + d[6] + d[7] +
-      d[8] + d[9] + d[10] + d[11] + d[12] + d[13] + d[14] + d[15] +
-      d[16] + d[17] + d[18] + d[19] + d[20] + d[21] + d[22] + d[23] +
-      d[24] + d[25] + d[26] + d[27] + d[28] + d[29] + d[30] + d[31];
+  wire [2:0] s8  [7:0];
+  generate
+    for (i=0;i<8;i=i+1) begin : L2
+      assign s8[i] = s16[2*i] + s16[2*i+1]; // max 2+2 = 4 -> fits in 3 bits
+    end
+  endgenerate
+
+  wire [3:0] s4 [3:0];
+  generate
+    for (i=0;i<4;i=i+1) begin : L3
+      assign s4[i] = s8[2*i] + s8[2*i+1];   // max 3+3 = 6 -> fits in 4 bits
+    end
+  endgenerate
+
+  wire [4:0] s2 [1:0];
+  assign s2[0] = s4[0] + s4[1];             // max 4+4 = 8 -> fits in 5 bits
+  assign s2[1] = s4[2] + s4[3];
+
+  assign data_out = s2[0] + s2[1];          // max 8+8 = 16 -> fits in 5 bits
+
+  // OPTIONAL PIPELINE (uncomment if timing still misses by a hair):
+  // reg [4:0] r_data_out;
+  // always @(posedge clk) r_data_out <= s2[0] + s2[1];
+  // assign data_out = r_data_out;
 endmodule
+
 
 // -----------------------------------------------------------------------------
 // DCO
@@ -319,6 +342,20 @@ module dco_5bit(
   wire [4:0] thresh_buf2 = thresh_buf + dco_offset;
   wire [4:0] thresh      = (thresh_sign) ? 5'd0
                                          : (thresh_buf2 > 5'd30 ? 5'd31 : thresh_buf2);
+  // inside dco_5bit
+reg [4:0] phase_r;
+always @(posedge clk or posedge reset) begin
+  if (reset) phase_r <= 5'd0;
+  else       phase_r <= (ctrl_buf * kdco) >> 1;
+end
+
+// then drive acs_5bit with phase_r instead of the raw multiply
+acs_5bit acs0(
+  .sign_in1(1'b0), .in1(thresh_val),
+  .sign_in2(~ctrl_sign), .in2(phase_r),
+  .sum(thresh_buf), .sign_out(thresh_sign)
+);
+
 
   reg  [4:0] counter;
   always @(posedge clk or posedge reset) begin
