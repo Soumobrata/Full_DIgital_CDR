@@ -1,27 +1,20 @@
+
 # Tiny Tapeout project information
 project:
-  title:        "All Digital PLL"        # Project title
-  author:       "Shrikrishna Kaje"       # Your name
-  discord:      "792801"                 # Optional: Discord username for TT community role assignment
-  description:  "RTL design of a fully programmable all-digital PLL"  # One-line description
-  language:     "Verilog"                # HDL used
-  clock_hz:     50000000                 # TinyTapeout global clock is 50 MHz
-
-  # Tile usage: 1x1 is default. Increase only if synthesis shows overflow.
-  tiles: "1x1"
-
-  # Your top module must start with "tt_um_"
+  title:        "All Digital PLL"
+  author:       "Shrikrishna Kaje"
+  discord:      "792801"
+  description:  "RTL design of a fully programmable all-digital PLL"
+  language:     "Verilog"
+  clock_hz:     50000000
+  tiles:        "1x1"
   top_module:   "tt_um_adpll"
 
-  # List all Verilog source files in ./src (each separately).
-  # The top wrapper must come first, then your project modules.
   source_files:
     - "tt_um_adpll.v"
     - "project.v"
 
-# Pinout description for datasheet/website. Leave unused pins blank.
 pinout:
-  # Inputs
   ui[0]: "clk90"
   ui[1]: "clk_ref"
   ui[2]: "clr"
@@ -31,7 +24,6 @@ pinout:
   ui[6]: "param_sel[1]"
   ui[7]: "param_sel[2]"
 
-  # Outputs
   uo[0]: "dout[0]"
   uo[1]: "dout[1]"
   uo[2]: "dout[2]"
@@ -41,7 +33,6 @@ pinout:
   uo[6]: ""
   uo[7]: ""
 
-  # Bidirectional IOs
   uio[0]: "fb_clk"
   uio[1]: "dco_out"
   uio[2]: "pgm_value[0]"
@@ -51,5 +42,4 @@ pinout:
   uio[6]: "pgm_value[4]"
   uio[7]: ""
 
-# Do not change!
 yaml_version: 6
