@@ -1,27 +1,25 @@
 # Tiny Tapeout project information
 project:
-  title:        "All digital PLL"      # Project title
-  author:       "Shrikrishna Kaje"      # Your name
-  discord:      "792801"      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
-  description:  "RTL design of a fully programmable all-digital pll"      # One line description of what your project does
-  language:     "Verilog" # other examples include SystemVerilog, Amaranth, VHDL, etc
-  clock_hz:     50000000       # Clock frequency in Hz (or 0 if not applicable)
+  title:        "All Digital PLL"        # Project title
+  author:       "Shrikrishna Kaje"       # Your name
+  discord:      "792801"                 # Optional: Discord username for TT community role assignment
+  description:  "RTL design of a fully programmable all-digital PLL"  # One-line description
+  language:     "Verilog"                # HDL used
+  clock_hz:     50000000                 # TinyTapeout global clock is 50 MHz
 
-  # How many tiles your design occupies? A single tile is about 167x108 uM.
-  tiles: "1x1"          # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2, 6x2 or 8x2
+  # Tile usage: 1x1 is default. Increase only if synthesis shows overflow.
+  tiles: "1x1"
 
-  # Your top module name must start with "tt_um_". Make it unique by including your github username:
-  top_module:  "tt_um_adpll"
+  # Your top module must start with "tt_um_"
+  top_module:   "tt_um_adpll"
 
-  # List your project's source files here.
-  # Source files must be in ./src and you must list each source file separately, one per line.
-  # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
+  # List all Verilog source files in ./src (each separately).
+  # The top wrapper must come first, then your project modules.
   source_files:
-    - "project.v"
     - "tt_um_adpll.v"
+    - "project.v"
 
-# The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
-# This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
+# Pinout description for datasheet/website. Leave unused pins blank.
 pinout:
   # Inputs
   ui[0]: "clk90"
@@ -43,7 +41,7 @@ pinout:
   uo[6]: ""
   uo[7]: ""
 
-  # Bidirectional pins
+  # Bidirectional IOs
   uio[0]: "fb_clk"
   uio[1]: "dco_out"
   uio[2]: "pgm_value[0]"
