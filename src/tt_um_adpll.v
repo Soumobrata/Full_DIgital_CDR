@@ -11,7 +11,7 @@
 `include "dco_5bit.v"
 `include "freq_divider_5bit.v" */
 
-`default_nettype none
+
 
 module tt_um_adpll (
     input  wire [7:0] ui_in,    // Dedicated inputs
@@ -567,6 +567,7 @@ endmodule
 
 
 
+`default_nettype none
 
 
 
