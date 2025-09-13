@@ -1,6 +1,3 @@
-
-
-
 /* SPDX-License-Identifier: Apache-2.0 */
 `default_nettype none
 
@@ -39,7 +36,7 @@ module tt_um_adpll (
   // Drive UIOs and directions
   assign uio_out[0] = fb_clk;      // output
   assign uio_out[1] = dco_out;     // output
-  assign uio_out[2] = uio_in[2];   // safe pass-throughs (optional)
+  assign uio_out[2] = uio_in[2];   // optional pass-throughs
   assign uio_out[3] = uio_in[3];
   assign uio_out[4] = uio_in[4];
   assign uio_out[5] = uio_in[5];
@@ -73,8 +70,8 @@ module tt_um_adpll (
     .sign       (sign)
   );
 
-  // Silence "unused" warnings if needed
-  wire _unused = &{ena, 1'b0};
+  // Tie off truly-unused input bits to silence lint
+  wire _unused = &{ena, uio_in[7], uio_in[1:0], 1'b0};
 
 endmodule
 
