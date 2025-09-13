@@ -1,4 +1,4 @@
-
+![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 # All Digital PLL (ADPLL) on TinyTapeout
 
 This project implements a **fully programmable all-digital phase-locked loop (ADPLL)** in Verilog.  
