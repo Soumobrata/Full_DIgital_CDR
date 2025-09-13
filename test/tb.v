@@ -32,8 +32,8 @@ module tb ();
   // Instantiate your top module
   tt_um_adpll user_project (
 `ifdef GL_TEST
-      .VPWR(VPWR),
-      .VGND(VGND),
+      .VPWR (VPWR),
+      .VGND (VGND),
 `endif
       .ui_in   (ui_in),
       .uo_out  (uo_out),
@@ -46,7 +46,7 @@ module tb ();
   );
 
   // Clock generation: 50 MHz (20 ns period)
-  initial clk = 0;
+  initial clk = 1'b0;
   always #10 clk = ~clk;
 
   // Simple stimulus
@@ -60,15 +60,13 @@ module tb ();
     #100;
     rst_n = 1'b1;
 
-    // Apply a few patterns to ui_in/uio_in
-    #200;
-    ui_in[1] = 1'b1;    // drive clk_ref high
-    #200;
-    ui_in[3] = 1'b1;    // toggle pgm
-    uio_in[6:2] = 5'b10101; // example pgm_value
-    #500;
+    // Wiggle a few inputs (clk_ref, pgm, pgm_value)
+    #200; ui_in[1] = 1'b1;                  // clk_ref high
+    #200; ui_in[3] = 1'b1;                  // pgm = 1
+           uio_in[6:2] = 5'b10101;          // pgm_value
+    #200; ui_in[3] = 1'b0;                  // pgm = 0
 
-    // End sim
+    #500;
     $finish;
   end
 
