@@ -318,7 +318,7 @@ endmodule
 
 
 // -----------------------------------------------------------------------------
-// DCO
+// DCO (fixed: single ACS instance name)
 // -----------------------------------------------------------------------------
 module dco_5bit(
   input  wire       clk,
@@ -330,33 +330,32 @@ module dco_5bit(
   input  wire [4:0] thresh_val,
   output reg        dco_clk
 );
-  wire [4:0] ctrl_buf   = (reset) ? 5'd0 : ctrl;
-  wire [4:0] phase      = (ctrl_buf * kdco) >> 1;
+  // 1) Buffer control on reset
+  wire [4:0] ctrl_buf = (reset) ? 5'd0 : ctrl;
 
+  // 2) Pipeline multiply to ease timing
+  reg  [4:0] phase_r;
+  always @(posedge clk or posedge reset) begin
+    if (reset) phase_r <= 5'd0;
+    else       phase_r <= (ctrl_buf * kdco) >> 1;
+  end
+
+  // 3) Compute threshold = thresh_val (+/-) phase_r, then add offset, clamp
   wire [4:0] thresh_buf;
   wire       thresh_sign;
-  acs_5bit acs0(.sign_in1(1'b0), .in1(thresh_val),
-                .sign_in2(~ctrl_sign), .in2(phase),
-                .sum(thresh_buf), .sign_out(thresh_sign));
+
+  // (only one ACS instance in this module)
+  acs_5bit acs_thresh(
+    .sign_in1(1'b0),      .in1(thresh_val),
+    .sign_in2(~ctrl_sign), .in2(phase_r),
+    .sum(thresh_buf),     .sign_out(thresh_sign)
+  );
 
   wire [4:0] thresh_buf2 = thresh_buf + dco_offset;
   wire [4:0] thresh      = (thresh_sign) ? 5'd0
                                          : (thresh_buf2 > 5'd30 ? 5'd31 : thresh_buf2);
-  // inside dco_5bit
-reg [4:0] phase_r;
-always @(posedge clk or posedge reset) begin
-  if (reset) phase_r <= 5'd0;
-  else       phase_r <= (ctrl_buf * kdco) >> 1;
-end
 
-// then drive acs_5bit with phase_r instead of the raw multiply
-acs_5bit acs0(
-  .sign_in1(1'b0), .in1(thresh_val),
-  .sign_in2(~ctrl_sign), .in2(phase_r),
-  .sum(thresh_buf), .sign_out(thresh_sign)
-);
-
-
+  // 4) Toggle output based on threshold
   reg  [4:0] counter;
   always @(posedge clk or posedge reset) begin
     if (reset) begin
@@ -372,6 +371,7 @@ acs_5bit acs0(
     end
   end
 endmodule
+
 
 // -----------------------------------------------------------------------------
 // Programmable frequency divider (<= in sequential logic)
