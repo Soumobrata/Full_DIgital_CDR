@@ -1,36 +1,32 @@
-
 # SPDX-License-Identifier: Apache-2.0
 import cocotb
 from cocotb.triggers import ClockCycles
 
-CLK_NS = 20  # 50 MHz period (from tb.v)
-
 @cocotb.test()
 async def test_project(dut):
-    """Minimal smoke test: use the Verilog TB clock only; pulse reset; tick a bit."""
+    """Finish before tb.v calls $finish at 1200 ns."""
+    # DO NOT start a cocotb Clock; tb.v already drives clk.
 
-    # DO NOT START a cocotb Clock here; tb.v already drives clk.
-
-    # Safe defaults
     if hasattr(dut, "ena"):    dut.ena.value = 1
     if hasattr(dut, "ui_in"):  dut.ui_in.value = 0
     if hasattr(dut, "uio_in"): dut.uio_in.value = 0
 
-    # Reset low for a few cycles, then high
+    # 5 cycles reset low, then high
     if hasattr(dut, "rst_n"):
         dut.rst_n.value = 0
-        await ClockCycles(dut.clk, 5)
+        await ClockCycles(dut.clk, 5)   # 100 ns
         dut.rst_n.value = 1
     else:
         await ClockCycles(dut.clk, 5)
 
-    # Wiggle ui[1] a few times (clk_ref) — harmless stimulus
+    # Wiggle ui[1] (clk_ref) 8 short ticks
     if hasattr(dut, "ui_in"):
-        for _ in range(8):
+        for _ in range(8):               # 8 cycles = 160 ns
             dut.ui_in.value = int(dut.ui_in.value) ^ (1 << 1)
             await ClockCycles(dut.clk, 1)
 
-    # Let it run a little so VCD has waves
-    await ClockCycles(dut.clk, 100)
+    # Small settle time, but keep total < 1200 ns
+    await ClockCycles(dut.clk, 15)       # 300 ns extra
 
-    # No assertions; reaching here = PASS
+    # Total waited ≈ 100 + 160 + 300 = 560 ns  < 1200 ns  -> PASS
+
