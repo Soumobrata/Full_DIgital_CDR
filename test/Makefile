@@ -1,41 +1,44 @@
-# TinyTapeout cocotb Makefile
+
+# See https://docs.cocotb.org/en/stable/quickstart.html for more info
 
 SIM ?= icarus
 TOPLEVEL_LANG ?= verilog
 
-# Project sources (must match info.yaml)
-SRC_DIR := $(PWD)/../src
-PROJECT_SOURCES := tt_um_adpll.v project.v
+SRC_DIR = $(PWD)/../src
+# Just basenames here
+PROJECT_SOURCES = tt_um_sfg_vcoadc_cdr.v project.v
 
-# RTL vs Gate-level
 ifneq ($(GATES),yes)
-  SIM_BUILD := sim_build/rtl
-  VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
+
+# RTL simulation:
+SIM_BUILD         = sim_build/rtl
+VERILOG_SOURCES  += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
+
 else
-  SIM_BUILD := sim_build/gl
-  COMPILE_ARGS    += -DGL_TEST -DFUNCTIONAL -DUSE_POWER_PINS -DSIM -DUNIT_DELAY=\#1
-  VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/primitives.v
-  VERILOG_SOURCES += $(PDK_ROOT)/sky130A/libs.ref/sky130_fd_sc_hd/verilog/sky130_fd_sc_hd.v
-  VERILOG_SOURCES += $(PWD)/gate_level_netlist.v
+
+# Gate level simulation:
+SIM_BUILD         = sim_build/gl
+COMPILE_ARGS     += -DGL_TEST
+COMPILE_ARGS     += -DFUNCTIONAL
+COMPILE_ARGS     += -DSIM
+VERILOG_SOURCES  += $(PDK_ROOT)/ihp-sg13g2/libs.ref/sg13g2_io/verilog/sg13g2_io.v
+VERILOG_SOURCES  += $(PDK_ROOT)/ihp-sg13g2/libs.ref/sg13g2_stdcell/verilog/sg13g2_stdcell.v
+
+# gate-level netlist from the flow:
+VERILOG_SOURCES  += $(PWD)/gate_level_netlist.v
+
+# add the WRAPPER so tb can bind tt_um_example -> gate-level top:
+VERILOG_SOURCES  += $(SRC_DIR)/project.v
+# (Do NOT add tt_um_sfg_vcoadc_cdr.v here to avoid RTL/GL double-definition.)
+
 endif
 
-# Include design headers
-COMPILE_ARGS += -I$(SRC_DIR)
+# Allow sharing configuration between design and testbench via `include`:
+COMPILE_ARGS     += -I$(SRC_DIR)
 
-# Testbench (Verilog)
-VERILOG_SOURCES += $(PWD)/tb.v
+# Testbench & cocotb entry
+VERILOG_SOURCES  += $(PWD)/tb.v
 TOPLEVEL = tb
+MODULE   = test
 
-# cocotb Python module (test/test.py)
-MODULE = test
-
-# JUnit file for CI summary
-export COCOTB_RESULTS_FILE := $(PWD)/results.xml
-
-# Optional: fetch VCD after run
-.PHONY: waves
-waves:
-	@cp -f $(SIM_BUILD)/**/tb.vcd $(PWD)/tb.vcd 2>/dev/null || true
-
-# Hand off to cocotb’s rules (provides 'make' / 'make sim')
 include $(shell cocotb-config --makefiles)/Makefile.sim
