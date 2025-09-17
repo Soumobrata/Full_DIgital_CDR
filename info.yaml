@@ -1,6 +1,6 @@
 # Tiny Tapeout project information
 project:
-  title:        "Full Digital CDR "
+  title:        "Full Digital CDR w"
   author:       "Soumobrata Ghosh"
   discord:      ""      
   description:  "CDR with open-loop VCO-ADC sampler, digital loop filter, and recovered clock debug outputs. TinyTapeout-ready."
