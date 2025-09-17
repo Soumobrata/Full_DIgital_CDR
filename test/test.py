@@ -1,33 +1,49 @@
-# SPDX-License-Identifier: Apache-2.0
 import cocotb
-from cocotb.triggers import ClockCycles
+from cocotb.clock import Clock
+from cocotb.triggers import RisingEdge
 
 @cocotb.test()
-async def test_project(dut):
-    """Minimal smoke test: let cocotb end the sim and write results.xml."""
-    # DO NOT start a cocotb Clock; tb.v already drives clk.
+async def test(dut):
+    """Basic TT rules + recovered clock activity."""
+    # 50 MHz clock
+    cocotb.start_soon(Clock(dut.clk, 20, units="ns").start())
 
-    # Safe defaults
-    if hasattr(dut, "ena"):    dut.ena.value = 1
-    if hasattr(dut, "ui_in"):  dut.ui_in.value = 0
-    if hasattr(dut, "uio_in"): dut.uio_in.value = 0
+    # init
+    dut.rst_n.value = 0
+    dut.ena.value   = 0
+    dut.ui_in.value = 0
+    dut.uio_in.value = 0
 
-    # Reset low for a few cycles, then high
-    if hasattr(dut, "rst_n"):
-        dut.rst_n.value = 0
-        await ClockCycles(dut.clk, 5)   # 5 cycles @ 50 MHz = 100 ns
-        dut.rst_n.value = 1
-    else:
-        await ClockCycles(dut.clk, 5)
+    # hold reset 5 cycles
+    for _ in range(5):
+        await RisingEdge(dut.clk)
 
-    # Wiggle ui[1] (clk_ref) a bit
-    if hasattr(dut, "ui_in"):
-        for _ in range(8):               # 8 cycles = 160 ns
-            dut.ui_in.value = int(dut.ui_in.value) ^ (1 << 1)
-            await ClockCycles(dut.clk, 1)
+    # deassert reset, still disabled
+    dut.rst_n.value = 1
+    for _ in range(5):
+        await RisingEdge(dut.clk)
 
-    # Let things settle
-    await ClockCycles(dut.clk, 15)       # 300 ns
+    # While disabled: outputs and uio_oe must be 0
+    assert int(dut.uo_out.value) == 0, f"uo_out not zero with ena=0: {dut.uo_out.value}"
+    assert int(dut.uio_oe.value) == 0, f"uio_oe not zero with ena=0: {dut.uio_oe.value}"
 
-    # Explicit pass so cocotb writes test/results.xml
-    assert True, "Smoke test completed"
+    # Enable DUT
+    dut.ena.value = 1
+
+    # Drive a gentle signed ramp on ui_in for a while
+    val = 0
+    toggles = 0
+    prev = (int(dut.uo_out.value) >> 1) & 1  # REC_CLK = uo_out[1]
+
+    for _ in range(800):
+        await RisingEdge(dut.clk)
+        val = (val + 2) & 0xFF
+        dut.ui_in.value = val
+
+        cur = (int(dut.uo_out.value) >> 1) & 1
+        if cur != prev:
+            toggles += 1
+            prev = cur
+
+    # We expect the recovered clock to toggle at least once
+    assert toggles > 0, "Recovered clock (uo_out[1]) did not toggle after enable"
