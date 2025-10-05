@@ -1,4 +1,4 @@
-// cdr.v — Baud-rate CDR (Mueller–Muller PD), phase-only feel, fixed baud
+// cdr.v — Baud-rate CDR (Mueller-Muller PD), phase-only feel, fixed baud
 `default_nettype none
 
 // -----------------------------------------------------------------------------
@@ -31,9 +31,9 @@ module cdr (
   localparam integer DFCW_SHIFT   = 29;  // very weak freq trim
 
   // Use plain integers for clamp math (iverilog friendly)
-  localparam integer FCW_NOM_INT  = 32'h8000_0000;
-  localparam integer DFCW_STEP_INT= (FCW_NOM_INT >> 10);  // ~0.098% of FCW
-  localparam signed  [31:0] DFCW_CLAMP = DFCW_STEP_INT;   // +/- one step
+  localparam integer FCW_NOM_INT    = 32'h8000_0000;
+  localparam integer DFCW_STEP_INT  = (FCW_NOM_INT >> 10);  // ~0.098% of FCW
+  localparam signed  [31:0] DFCW_CLAMP = DFCW_STEP_INT;     // +/- one step
 
   wire rst = ~rst_n;
 
@@ -60,7 +60,7 @@ module cdr (
     .clk(clk), .rst(rst), .en(sample_en), .din(d_bb), .dout(d_z1)
   );
 
-  // 4) Mueller–Muller PD
+  // 4) Mueller-Muller PD
   mmpd_mueller_core u_pd (
     .x_n(x_n), .x_z1(x_z1),
     .d_n(d_bb), .d_z1(d_z1),
@@ -205,17 +205,25 @@ module dco_tick_on_wrap #(
   output reg  [PHASE_BITS-1:0]         phase,
   output wire                          sample_en
 );
-  // Explicit sign-extension for both operands to avoid parsing issues
+  // Explicit sign-extension for both operands
   wire signed [PHASE_BITS:0] s_fcw = {1'b0, fcw_nom};
   wire signed [PHASE_BITS:0] s_df  = {dfcw[PHASE_BITS-1], dfcw};
   wire signed [PHASE_BITS:0] sum   = s_fcw + s_df;
 
-  // Saturate to [0, 2^PHASE_BITS - 1]
-  wire [PHASE_BITS-1:0] eff =
-      (sum <= 0) ? {PHASE_BITS{1'b0}} :
-      (sum >  $signed({1'b0,{PHASE_BITS{1'b1}}})) ? {PHASE_BITS{1'b1}} :
-       sum[PHASE_BITS-1:0];
+  // Saturate to [0, 2^PHASE_BITS - 1] using a simple combinational block
+  localparam [PHASE_BITS:0] MAXSUM = {1'b0, {PHASE_BITS{1'b1}}};
+  reg [PHASE_BITS-1:0] eff;
 
+  always @* begin
+    if (sum <= 0)
+      eff = {PHASE_BITS{1'b0}};
+    else if (sum > $signed(MAXSUM))
+      eff = {PHASE_BITS{1'b1}};
+    else
+      eff = sum[PHASE_BITS-1:0];
+  end
+
+  // Generate wrap pulse and update phase
   wire [PHASE_BITS-1:0] nxt = phase + eff;
   assign sample_en = (nxt < phase);  // wrap -> 1-cycle pulse
 
