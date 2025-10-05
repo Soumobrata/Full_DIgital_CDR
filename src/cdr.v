@@ -1,4 +1,4 @@
-// cdr.v — Baud-rate CDR (Mueller-Muller PD), phase-only feel, fixed baud
+// cdr.v — Baud-rate CDR (Mueller-Muller), phase-only feel, fixed baud
 `default_nettype none
 
 // -----------------------------------------------------------------------------
@@ -30,10 +30,10 @@ module cdr (
   // keep dfcw tiny vs FCW_NOM (phase-only feel)
   localparam integer DFCW_SHIFT = 29;  // very weak freq trim
 
-  // Use plain integers for clamp math (iverilog friendly)
+  // integer math for clamp (Icarus-friendly)
   localparam integer FCW_NOM_INT     = 32'h8000_0000;
-  localparam integer DFCW_STEP_INT   = (FCW_NOM_INT >> 10);  // ~0.098% of FCW
-  localparam signed  [31:0] DFCW_CLAMP = DFCW_STEP_INT;      // +/- one step
+  localparam integer DFCW_STEP_INT   = (FCW_NOM_INT >> 10);      // ~0.098% of FCW
+  localparam signed  [31:0] DFCW_CLAMP = DFCW_STEP_INT;          // +/- one step
 
   wire rst = ~rst_n;
 
@@ -60,7 +60,7 @@ module cdr (
     .clk(clk), .rst(rst), .en(sample_en), .din(d_bb), .dout(d_z1)
   );
 
-  // 4) Mueller-Muller PD
+  // 4) Mueller–Muller PD
   mmpd_mueller_core u_pd (
     .x_n(x_n), .x_z1(x_z1),
     .d_n(d_bb), .d_z1(d_z1),
@@ -77,29 +77,30 @@ module cdr (
     .v_ctrl(v_raw)
   );
 
-  // 6) scale + clamp to tiny dfcw
+  // 6) scale + clamp to tiny dfcw (procedural to avoid ternary parser issues)
   wire signed [31:0] df_unclamped = $signed(v_raw) >>> DFCW_SHIFT;
 
-  wire signed [31:0] df_limited =
-      (df_unclamped >  DFCW_CLAMP) ?  DFCW_CLAMP :
-      (df_unclamped < -DFCW_CLAMP) ? -DFCW_CLAMP : df_unclamped;
+  reg  signed [31:0] df_limited_r;
+  always @* begin
+    if (df_unclamped > DFCW_CLAMP)
+      df_limited_r = DFCW_CLAMP;
+    else if (df_unclamped < -DFCW_CLAMP)
+      df_limited_r = -DFCW_CLAMP;
+    else
+      df_limited_r = df_unclamped;
+  end
 
-  assign dfcw   = df_limited;
+  assign dfcw   = df_limited_r;
   assign v_ctrl = v_raw;
 
   // freeze integrator when clamped
-  assign freeze_aw = (df_unclamped != df_limited);
+  assign freeze_aw = (df_unclamped != df_limited_r);
 
   // 7) DCO: one-cycle sample_en pulse on phase wrap
-  // Wrap-safe effective FCW computation (no arithmetic in declaration)
-  wire [PHASE_BITS-1:0] dfcw_u  = dfcw[PHASE_BITS-1:0];
-  wire [PHASE_BITS:0]   sum_u;
-  reg  [PHASE_BITS-1:0] eff;
-
-  assign sum_u = {1'b0, FCW_NOM} + {1'b0, dfcw_u};
-  always @* begin
-    eff = sum_u[PHASE_BITS-1:0];  // wrapping add; dfcw is tiny so this is fine
-  end
+  // Combine FCW + dfcw using explicit zero-extended add (Icarus-safe)
+  wire [PHASE_BITS-1:0] dfcw_u = dfcw[PHASE_BITS-1:0];
+  wire [PHASE_BITS:0]   sum_u  = {1'b0, FCW_NOM} + {1'b0, dfcw_u};
+  wire [PHASE_BITS-1:0] eff     = sum_u[PHASE_BITS-1:0];  // wrapping add
 
   dco_tick_on_wrap #(.PHASE_BITS(PHASE_BITS)) u_dco (
     .clk(clk), .rst(rst),
