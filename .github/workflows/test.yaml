@@ -1,35 +1,18 @@
-# .github/workflows/test.yaml
-name: test
-on: [push, pull_request]
+- name: Run cocotb (icarus via Makefile)
+  env:
+    COCOTB_RESULTS_FILE: test/results.xml
+  run: |
+    make -C test SIM=icarus WAVES=1 \
+      TOPLEVEL=tt_um_sfg_cdr TOPLEVEL_LANG=verilog \
+      VERILOG_SOURCES="../cdr.v ../project.v" \
+      MODULE=test
 
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install simulator and Python deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y iverilog
-          python -m pip install --upgrade pip
-          pip install -r test/requirements.txt
-
-      - name: Run cocotb tests
-        env:
-          COCOTB_RESULTS_FILE: test/results.xml
-        run: pytest -q test --maxfail=1 --disable-warnings --junitxml=test/results.xml
-
-      - name: Upload artifacts (always)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: sim-artifacts
-          path: |
-            test/results.xml
-            test/tb.vcd
+- name: Upload artifacts (always)
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: sim-artifacts
+    path: |
+      test/results.xml
+      test/sim_build/**/*.vcd
+    if-no-files-found: warn
