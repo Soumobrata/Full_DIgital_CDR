@@ -18,17 +18,17 @@ module cdr (
 );
 
   // -------- configuration --------
-  localparam integer PHASE_BITS   = 32;
+  localparam integer PHASE_BITS = 32;
 
   // 25 MHz tick @ 50 MHz clk  =>  UI = 2 clocks
   localparam [PHASE_BITS-1:0] FCW_NOM = 32'h8000_0000;
 
   // loop gains (conservative)
-  localparam integer KP_SHIFT     = 12;
-  localparam integer KI_SHIFT     = 18;
+  localparam integer KP_SHIFT = 12;
+  localparam integer KI_SHIFT = 18;
 
   // keep dfcw tiny vs FCW_NOM (phase-only feel)
-  localparam integer DFCW_SHIFT   = 29;  // very weak freq trim
+  localparam integer DFCW_SHIFT = 29;  // very weak freq trim
 
   // Use plain integers for clamp math (iverilog friendly)
   localparam integer FCW_NOM_INT     = 32'h8000_0000;
@@ -77,7 +77,7 @@ module cdr (
     .v_ctrl(v_raw)
   );
 
-  // 6) scale + clamp to tiny dfcw (phase-only feel)
+  // 6) scale + clamp to tiny dfcw
   wire signed [31:0] df_unclamped = $signed(v_raw) >>> DFCW_SHIFT;
 
   wire signed [31:0] df_limited =
@@ -91,9 +91,15 @@ module cdr (
   assign freeze_aw = (df_unclamped != df_limited);
 
   // 7) DCO: one-cycle sample_en pulse on phase wrap
-  // NOTE: Because dfcw clamp is tiny relative to FCW_NOM, sum never underflows/overflows.
-  // We therefore skip saturation and just do wrapping add, which is Icarus-safe.
-  wire [PHASE_BITS-1:0] eff = FCW_NOM + dfcw[PHASE_BITS-1:0];
+  // Wrap-safe effective FCW computation (no arithmetic in declaration)
+  wire [PHASE_BITS-1:0] dfcw_u  = dfcw[PHASE_BITS-1:0];
+  wire [PHASE_BITS:0]   sum_u;
+  reg  [PHASE_BITS-1:0] eff;
+
+  assign sum_u = {1'b0, FCW_NOM} + {1'b0, dfcw_u};
+  always @* begin
+    eff = sum_u[PHASE_BITS-1:0];  // wrapping add; dfcw is tiny so this is fine
+  end
 
   dco_tick_on_wrap #(.PHASE_BITS(PHASE_BITS)) u_dco (
     .clk(clk), .rst(rst),
