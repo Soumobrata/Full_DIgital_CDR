@@ -2,26 +2,23 @@
  * SPDX-License-Identifier: Apache-2.0
  * Author: Soumobrata Ghosh
  */
-
 `default_nettype none
 
 module tt_um_sfg_cdr (
   input  wire [7:0] ui_in,   // 8 input pins
   output wire [7:0] uo_out,  // 8 output pins
-  input  wire [7:0] uio_in,  // 8 bidir pins
-  output wire [7:0] uio_out,
-  output wire [7:0] uio_oe,
-  input  wire       ena,     // mux enable
+  input  wire [7:0] uio_in,  // 8 bidir input
+  output wire [7:0] uio_out, // 8 bidir output
+  output wire [7:0] uio_oe,  // 8 bidir output-en
+  input  wire       ena,     // TT mux enable
   input  wire       clk,     // ~50 MHz board clock
-  input  wire       rst_n    // active-low reset
+  input  wire       rst_n    // active low
 );
 
-  // ------------------------------------------
-  // instantiate your unchanged CDR core
-  // ------------------------------------------
-  wire signed [7:0] y_n   = ui_in;
-  wire        sample_en;
-  wire signed [7:0] x_n;
+  // ---------- CDR core (unchanged) ----------
+  wire signed [7:0]  y_n = ui_in;
+  wire        sample_en;         // 1-cycle pulse each baud
+  wire signed [7:0]  x_n;
   wire        d_bb;
   wire [1:0]  d_q2;
   wire signed [15:0] f_n;
@@ -41,16 +38,33 @@ module tt_um_sfg_cdr (
     .dfcw(dfcw)
   );
 
-  // ------------------------------------------
-  // simple debug mapping to outputs
-  // ------------------------------------------
-  assign uo_out = ena ? {
-      dfcw[31], v_ctrl[31], d_q2[1], d_q2[0],
-      d_bb, x_n[7], sample_en, 1'b0
-  } : 8'h00;
+  // ---------- 50% duty REC_CLK: toggle on each sample_en ----------
+  reg rec_clk;
+  always @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+      rec_clk <= 1'b0;
+    end else if (sample_en) begin
+      rec_clk <= ~rec_clk;
+    end
+  end
 
+  // ---------- Outputs (quiet when ena=0) ----------
+  // uo_out[0] = SAMPLE_EN (pulse), uo_out[1] = REC_CLK (50% duty)
+  wire [7:0] outs = {
+    dfcw[31],     // [7] sign(dfcw)  (debug)
+    v_ctrl[31],   // [6] sign(v_ctrl) (debug)
+    d_q2[1],      // [5]
+    d_q2[0],      // [4]
+    d_bb,         // [3]
+    x_n[7],       // [2] sign of sample
+    rec_clk,      // [1] REC_CLK
+    sample_en     // [0] SAMPLE_EN
+  };
+
+  assign uo_out  = ena ? outs : 8'h00;
   assign uio_out = 8'h00;
   assign uio_oe  = 8'h00;
 
 endmodule
+
 `default_nettype wire
