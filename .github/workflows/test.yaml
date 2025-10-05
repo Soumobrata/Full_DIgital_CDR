@@ -4,7 +4,6 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -20,14 +19,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r test/requirements.txt
 
-      - name: Run cocotb tests (Icarus via Makefile)
+      - name: Run cocotb via Makefile (Icarus)
         env:
           COCOTB_RESULTS_FILE: test/results.xml
         run: |
-          make -C test SIM=icarus WAVES=1 \
-            TOPLEVEL=tt_um_sfg_cdr TOPLEVEL_LANG=verilog \
-            VERILOG_SOURCES="../src/cdr.v ../src/project.v" \
-            MODULE=test
+          make -C test SIM=icarus WAVES=1
 
       - name: Upload artifacts (always)
         if: always()
