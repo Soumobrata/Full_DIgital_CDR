@@ -31,9 +31,9 @@ module cdr (
   localparam integer DFCW_SHIFT   = 29;  // very weak freq trim
 
   // Use plain integers for clamp math (iverilog friendly)
-  localparam integer FCW_NOM_INT    = 32'h8000_0000;
-  localparam integer DFCW_STEP_INT  = (FCW_NOM_INT >> 10);  // ~0.098% of FCW
-  localparam signed  [31:0] DFCW_CLAMP = DFCW_STEP_INT;     // +/- one step
+  localparam integer FCW_NOM_INT     = 32'h8000_0000;
+  localparam integer DFCW_STEP_INT   = (FCW_NOM_INT >> 10);  // ~0.098% of FCW
+  localparam signed  [31:0] DFCW_CLAMP = DFCW_STEP_INT;      // +/- one step
 
   wire rst = ~rst_n;
 
@@ -77,7 +77,7 @@ module cdr (
     .v_ctrl(v_raw)
   );
 
-  // 6) scale + clamp to tiny dfcw
+  // 6) scale + clamp to tiny dfcw (phase-only feel)
   wire signed [31:0] df_unclamped = $signed(v_raw) >>> DFCW_SHIFT;
 
   wire signed [31:0] df_limited =
@@ -91,12 +91,14 @@ module cdr (
   assign freeze_aw = (df_unclamped != df_limited);
 
   // 7) DCO: one-cycle sample_en pulse on phase wrap
-  wire [PHASE_BITS-1:0] phase_unused;
+  // NOTE: Because dfcw clamp is tiny relative to FCW_NOM, sum never underflows/overflows.
+  // We therefore skip saturation and just do wrapping add, which is Icarus-safe.
+  wire [PHASE_BITS-1:0] eff = FCW_NOM + dfcw[PHASE_BITS-1:0];
 
   dco_tick_on_wrap #(.PHASE_BITS(PHASE_BITS)) u_dco (
     .clk(clk), .rst(rst),
-    .fcw_nom(FCW_NOM), .dfcw(dfcw[PHASE_BITS-1:0]),
-    .phase(phase_unused), .sample_en(sample_en)
+    .eff(eff),
+    .sample_en(sample_en)
   );
 
 endmodule
@@ -194,36 +196,17 @@ module loop_filter_pi_aw #(
   end
 endmodule
 
-// DCO: one-cycle tick on wrap (Icarus-safe signed arithmetic)
+// DCO: simple phase accumulator; tick when phase wraps
 module dco_tick_on_wrap #(
   parameter integer PHASE_BITS = 32
 )(
-  input  wire                          clk,
-  input  wire                          rst,
-  input  wire [PHASE_BITS-1:0]         fcw_nom,
-  input  wire signed [PHASE_BITS-1:0]  dfcw,
-  output reg  [PHASE_BITS-1:0]         phase,
-  output wire                          sample_en
+  input  wire                      clk,
+  input  wire                      rst,
+  input  wire [PHASE_BITS-1:0]     eff,       // effective FCW (already combined)
+  output wire                      sample_en
 );
-  // Explicit sign-extension for both operands
-  wire signed [PHASE_BITS:0] s_fcw = {1'b0, fcw_nom};
-  wire signed [PHASE_BITS:0] s_df  = {dfcw[PHASE_BITS-1], dfcw};
-  wire signed [PHASE_BITS:0] sum   = s_fcw + s_df;
+  reg [PHASE_BITS-1:0] phase;
 
-  // Saturate to [0, 2^PHASE_BITS - 1] using a simple combinational block
-  localparam [PHASE_BITS:0] MAXSUM = {1'b0, {PHASE_BITS{1'b1}}};
-  reg [PHASE_BITS-1:0] eff;
-
-  always @* begin
-    if (sum <= 0)
-      eff = {PHASE_BITS{1'b0}};
-    else if (sum > $signed(MAXSUM))
-      eff = {PHASE_BITS{1'b1}};
-    else
-      eff = sum[PHASE_BITS-1:0];
-  end
-
-  // Generate wrap pulse and update phase
   wire [PHASE_BITS-1:0] nxt = phase + eff;
   assign sample_en = (nxt < phase);  // wrap -> 1-cycle pulse
 
