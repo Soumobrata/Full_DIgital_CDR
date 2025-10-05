@@ -1,3 +1,4 @@
+# .github/workflows/test.yaml
 name: test
 on: [push, pull_request]
 
@@ -22,8 +23,7 @@ jobs:
       - name: Run cocotb tests
         env:
           COCOTB_RESULTS_FILE: test/results.xml
-        run: |
-          pytest -q test --maxfail=1 --disable-warnings --junitxml=test/results.xml
+        run: pytest -q test --maxfail=1 --disable-warnings --junitxml=test/results.xml
 
       - name: Upload artifacts (always)
         if: always()
