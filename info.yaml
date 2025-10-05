@@ -8,10 +8,10 @@ project:
   clock_hz:     50000000        #
 
   tiles: "1x1"
-  top_module:  "tt_um_sfg_vcoadc_cdr"
+  top_module:  "cdr"
 
   source_files:
-    - "tt_um_sfg_vcoadc_cdr.v"
+    - "cdr.v"
     - "project.v"
 
 
