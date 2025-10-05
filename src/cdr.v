@@ -1,4 +1,4 @@
-// cdr.v — Baud-rate CDR (Mueller-Muller), phase-only feel, fixed baud
+// cdr.v - Baud-rate CDR (Mueller-Muller PD), phase-only feel, fixed baud
 `default_nettype none
 
 // -----------------------------------------------------------------------------
@@ -20,7 +20,7 @@ module cdr (
   // -------- configuration --------
   localparam integer PHASE_BITS = 32;
 
-  // 25 MHz tick @ 50 MHz clk  =>  UI = 2 clocks
+  // 25 MHz tick @ 50 MHz clk => UI = 2 clocks
   localparam [PHASE_BITS-1:0] FCW_NOM = 32'h8000_0000;
 
   // loop gains (conservative)
@@ -32,8 +32,8 @@ module cdr (
 
   // integer math for clamp (Icarus-friendly)
   localparam integer FCW_NOM_INT     = 32'h8000_0000;
-  localparam integer DFCW_STEP_INT   = (FCW_NOM_INT >> 10);      // ~0.098% of FCW
-  localparam signed  [31:0] DFCW_CLAMP = DFCW_STEP_INT;          // +/- one step
+  localparam integer DFCW_STEP_INT   = (FCW_NOM_INT >> 10);  // ~0.098% of FCW
+  localparam signed  [31:0] DFCW_CLAMP = DFCW_STEP_INT;      // +/- one step
 
   wire rst = ~rst_n;
 
@@ -60,7 +60,7 @@ module cdr (
     .clk(clk), .rst(rst), .en(sample_en), .din(d_bb), .dout(d_z1)
   );
 
-  // 4) Mueller–Muller PD
+  // 4) Mueller-Muller PD
   mmpd_mueller_core u_pd (
     .x_n(x_n), .x_z1(x_z1),
     .d_n(d_bb), .d_z1(d_z1),
@@ -97,10 +97,20 @@ module cdr (
   assign freeze_aw = (df_unclamped != df_limited_r);
 
   // 7) DCO: one-cycle sample_en pulse on phase wrap
-  // Combine FCW + dfcw using explicit zero-extended add (Icarus-safe)
-  wire [PHASE_BITS-1:0] dfcw_u = dfcw[PHASE_BITS-1:0];
-  wire [PHASE_BITS:0]   sum_u  = {1'b0, FCW_NOM} + {1'b0, dfcw_u};
-  wire [PHASE_BITS-1:0] eff     = sum_u[PHASE_BITS-1:0];  // wrapping add
+  // Build effective FCW as separate assigns (all zero-extended, Icarus-safe)
+  wire [PHASE_BITS-1:0] dfcw_u;
+  assign dfcw_u = dfcw[PHASE_BITS-1:0];
+
+  wire [PHASE_BITS:0] fcw_zext;
+  wire [PHASE_BITS:0] dfcw_zext;
+  wire [PHASE_BITS:0] sum_u;
+
+  assign fcw_zext  = {1'b0, FCW_NOM};
+  assign dfcw_zext = {1'b0, dfcw_u};
+  assign sum_u     = fcw_zext + dfcw_zext;
+
+  wire [PHASE_BITS-1:0] eff;
+  assign eff = sum_u[PHASE_BITS-1:0]; // wrapping add (dfcw is tiny)
 
   dco_tick_on_wrap #(.PHASE_BITS(PHASE_BITS)) u_dco (
     .clk(clk), .rst(rst),
@@ -150,7 +160,7 @@ module quantizer_sign2b (
   // Hard decision: 1 if >=0, 0 if <0
   assign d_bb = ~x_n[7];
 
-  // Two-bit soft bins: 00 = strong neg, 01 = weak neg, 10 = weak pos, 11 = strong pos
+  // Two-bit soft bins: 00 strong neg, 01 weak neg, 10 weak pos, 11 strong pos
   wire neg = x_n[7];
   wire [6:0] mag = neg ? (~x_n[6:0] + 7'd1) : x_n[6:0];
   wire weak = (mag < 7'd8);
