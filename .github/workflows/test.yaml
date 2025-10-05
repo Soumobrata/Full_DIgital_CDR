@@ -24,21 +24,9 @@ jobs:
         env:
           COCOTB_RESULTS_FILE: test/results.xml
         run: |
-          set -e
-
-          # Resolve source file locations (supports root or src/)
-          SRC1=""
-          if [ -f "./src/cdr.v" ];      then SRC1="./src/cdr.v"; else SRC1="./cdr.v"; fi
-          SRC2=""
-          if [ -f "./src/project.v" ];  then SRC2="./src/project.v"; else SRC2="./project.v"; fi
-
-          echo "Using sources:"
-          ls -l "$SRC1" "$SRC2"
-
-          # Run cocotb using the test/Makefile
           make -C test SIM=icarus WAVES=1 \
             TOPLEVEL=tt_um_sfg_cdr TOPLEVEL_LANG=verilog \
-            VERILOG_SOURCES="../$SRC1 ../$SRC2" \
+            VERILOG_SOURCES="../src/cdr.v ../src/project.v" \
             MODULE=test
 
       - name: Upload artifacts (always)
