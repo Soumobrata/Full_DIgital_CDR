@@ -1,5 +1,3 @@
-
-// project.v
 `default_nettype none
 
 module tt_um_sfg_cdr (
